@@ -1,0 +1,4 @@
+# Local test state; never commit credentials
+.env
+tests/local.sh
+data/

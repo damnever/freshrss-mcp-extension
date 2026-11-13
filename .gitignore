@@ -2,3 +2,7 @@
 .env
 tests/local.sh
 data/
+
+# local scratch from the smoke test
+__pycache__/
+*.pyc

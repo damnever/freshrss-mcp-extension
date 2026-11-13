@@ -14,7 +14,7 @@ declare(strict_types=1);
  * with a FreshRSS API password before any data is touched. See src/Auth.php.
  */
 final class MCPExtension extends Minz_Extension {
-	public const VERSION = '0.1.0';
+	public const VERSION = '0.2.0';
 
 	/** Class name prefix of the files in src/, used by the autoloader below. */
 	public const CLASS_PREFIX = 'FreshMcp_';

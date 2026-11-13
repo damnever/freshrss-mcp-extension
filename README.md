@@ -6,6 +6,10 @@ client that speaks Streamable HTTP can list the feeds, pull the unread queue, ru
 one article. Everything is read-only, and everything is scoped to the user whose API password the
 client was given.
 
+It answers both eras of the protocol on the one URL: revision **2026-07-28**, where every request
+carries its own version and there is no handshake, and the earlier handshake revisions back to
+**2024-11-05**. See [Protocol versions](#protocol-versions).
+
 ```
 MCP client ──POST /api/misc.php?ext=MCP──▶ FreshRSS ──▶ FreshRSS_EntryDAO / FeedDAO / CategoryDAO
              (FreshRSS API password)         (this extension)
@@ -96,11 +100,61 @@ be used to sign in to the web interface, and revoking it does not disturb anythi
 secrets in transit, so serve FreshRSS over TLS.
 
 ```sh
-# The handshake, with curl
+URL='https://freshrss.example.net/api/misc.php?ext=MCP'
+
+# 2026-07-28: no handshake, the request says everything itself
+curl -s -u 'alice:secret' -H 'Content-Type: application/json' \
+  -H 'MCP-Protocol-Version: 2026-07-28' -H 'Mcp-Method: server/discover' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"server/discover","params":{"_meta":{
+        "io.modelcontextprotocol/protocolVersion":"2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities":{}}}}' "$URL"
+
+# 2025-06-18 and older: open with the handshake, then ask for the tools
 curl -s -u 'alice:secret' -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl"}}}' \
-  'https://freshrss.example.net/api/misc.php?ext=MCP'
+  "$URL"
 ```
+
+## Protocol versions
+
+One endpoint, both eras, chosen per request and remembered for nothing — which is how a stateless PHP
+endpoint wants to work anyway:
+
+| The request looks like | Served as |
+| --- | --- |
+| `params._meta` names `2026-07-28` | the handshakeless era: `server/discover`, `resultType`, cache hints |
+| `MCP-Protocol-Version: 2025-11-25` … `2024-11-05` | the handshake era, under the revision named |
+| nothing names a version | `2025-03-26`, the last revision before the version header existed |
+
+**The modern era.** `server/discover` answers with `supportedVersions`, `capabilities`, the server
+identity under `_meta['io.modelcontextprotocol/serverInfo']`, `instructions`, and the cache fields
+`ttlMs` / `cacheScope`. Every result carries `resultType: "complete"` and the same `serverInfo`, so a
+client needs no prior state to know who it is talking to. `tools/list` adds `ttlMs` and `cacheScope`.
+`initialize` and `ping` are gone, as they are in the revision, and the error says what to call instead.
+
+The transport headers a modern request mirrors from its body are checked, and must agree: a gateway may
+route on `Mcp-Method` while this server acts on the body, and a difference between the two is a
+security problem and not a curiosity.
+
+| Situation | Answer |
+| --- | --- |
+| a header is missing, or contradicts the body | `400` with `-32020` (HeaderMismatch) |
+| a protocol version this server does not speak | `400` with `-32022` and `data.supported` |
+| `_meta` lacks a required field | `400` with `-32602` |
+| a method that does not exist | `404` with `-32601` |
+
+`Mcp-Name` is decoded from the `=?base64?…?=` sentinel form before it is compared. No tool parameter
+is annotated with `x-mcp-header`, so there are no `Mcp-Param-*` headers to validate.
+
+**The handshake era.** `initialize` answers with the revision the client asked for, `ping` works, and
+results carry no `resultType` — a client of that era treats an absent one as `complete`, and does not
+expect to see other fields either.
+
+**Deliberately not implemented:** the per-request SSE stream (every reply is one JSON object), the GET
+stream and `Last-Event-ID` resumption that 2026-07-28 removed, protocol-level sessions, tasks,
+`subscriptions/listen`, and `outputSchema` / `structuredContent` on the tools. An `Origin` allowlist is
+also not checked: this endpoint is behind the FreshRSS API password and, as FreshRSS itself is, it is
+meant to sit behind TLS and, ideally, not be world-readable.
 
 ## Tools
 
@@ -183,10 +237,12 @@ xExtension-MCP/
 ├── metadata.json          # type: system, so it is reachable from /api/misc.php
 ├── extension.php          # Minz_Extension: registers the ApiMisc hook, nothing else
 └── src/
-    ├── Auth.php           # API password / Auth token → FreshRSS_Context::initUser()
-    ├── Server.php         # JSON-RPC 2.0: initialize, ping, notifications, tools/list, tools/call
-    ├── Tools.php          # the five tools, on top of the FreshRSS DAOs
-    └── ProtocolError.php  # internal way to raise a JSON-RPC error code
+    ├── Auth.php            # API password / Auth token → FreshRSS_Context::initUser()
+    ├── Server.php          # JSON-RPC 2.0 routing, header checks, and the two eras' envelopes
+    ├── ProtocolVersion.php # which revision one request is speaking, and what that implies
+    ├── ProtocolError.php   # a JSON-RPC error, with the HTTP status that goes with it
+    ├── Http.php            # the few HTTP primitives: read a body, read a header, answer
+    └── Tools.php           # the five tools, on top of the FreshRSS DAOs
 ```
 
 Syntax-check without a host PHP:
@@ -195,7 +251,8 @@ Syntax-check without a host PHP:
 docker run --rm -v "$PWD/xExtension-MCP:/p:ro" --entrypoint php freshrss/freshrss:edge -l /p/src/Tools.php
 ```
 
-End-to-end checks, against any FreshRSS (they only read):
+End-to-end checks, against any FreshRSS (they only read). Seventy of them, both eras: the legacy
+handshake, a modern `server/discover`, every header-mismatch and version-refusal path, and each tool.
 
 ```sh
 FRSS_URL=https://freshrss.example.net FRSS_USER=alice FRSS_API_PASSWORD=secret python3 tests/smoke.py
@@ -214,6 +271,8 @@ FRSS_URL=https://freshrss.example.net FRSS_USER=alice FRSS_API_PASSWORD=secret p
 * `FreshRSS_EntryDAO::listWhere()` starts a continuation page *at* the entry named by the token, so
   ask for one row more than you return and drop the first. With `sort: 'date'` the DAO also needs that
   entry's date as `continuation_values[0]`, which is why the token is `id:date`.
+* A `Throwable` cannot be cloned in PHP, so `FreshMcp_ProtocolError::withId()` mutates and returns
+  `$this`. One error answers one request, once, which is all the chaining has to survive.
 * `listWhere()` with `type: 'a'` or `'A'` consults `FreshRSS_Context::$search` for feed visibility, so
   always pass a `FreshRSS_BooleanSearch`, even an empty one.
 

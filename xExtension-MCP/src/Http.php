@@ -77,7 +77,8 @@ final class FreshMcp_Http {
 	 * @return array{0: mixed, 1: ?string} what was sent, and why it could not be read
 	 */
 	public static function readBody(): array {
-		$raw = file_get_contents('php://input');
+		// Read one byte past the limit and no more, so that an oversized body is never held in memory.
+		$raw = file_get_contents('php://input', false, null, 0, self::MAX_BODY_BYTES + 1);
 		if ($raw === false) {
 			return [null, 'Could not read the request body.'];
 		}

@@ -10,10 +10,13 @@ declare(strict_types=1);
  * page is fetched only when every address its host resolves to is a public one, which keeps
  * this endpoint out of the LAN, of the loopback and of the cloud metadata addresses.
  *
- * What this cannot cover, from inside an extension: the request itself is made by FreshRSS,
- * which follows redirections and resolves the host name again, so a host that is public when
- * checked here can still be pointed elsewhere before FreshRSS connects. Anything that must
- * never be reachable this way belongs on a different network, not merely on another port.
+ * The request itself is made by FreshRSS, which from 1.30 checks every redirection against its own
+ * list of private ranges and pins the connection to the addresses it checked, so a redirection or
+ * a DNS answer that changes in between does not get past it. Two settings switch that off, and
+ * this check then covers only the first URL: an outbound proxy (FreshRSS checks the proxy, not the
+ * page) and `internal_host_allowlist`, whose entries FreshRSS lets through on a redirection.
+ * Anything that must never be reachable this way belongs on a different network, not merely on
+ * another port.
  */
 final class FreshMcp_UrlPolicy {
 
@@ -25,7 +28,8 @@ final class FreshMcp_UrlPolicy {
 	];
 
 	private const BLOCKED_V6 = [
-		['::', 128], ['::1', 128], ['::ffff:0:0', 96], ['64:ff9b::', 96], ['100::', 64],
+		// ::/96 also covers ::1 and the deprecated IPv4-compatible addresses such as ::7f00:1.
+		['::', 96], ['::ffff:0:0', 96], ['64:ff9b:1::', 48], ['100::', 64],
 		['2001::', 32], ['2001:2::', 48], ['2002::', 16], ['2001:db8::', 32], ['fc00::', 7],
 		['fe80::', 10], ['ff00::', 8],
 	];
@@ -82,16 +86,19 @@ final class FreshMcp_UrlPolicy {
 			return [$host];
 		}
 
+		// dns_get_record() is what FreshRSS resolves with and pins the connection to, so every address
+		// it can connect to is among these. gethostbynamel() adds what /etc/hosts says for IPv4.
 		$found = gethostbynamel($host);
 		$addresses = is_array($found) ? $found : [];
-		$aaaa = dns_get_record($host, DNS_AAAA);
-		foreach (is_array($aaaa) ? $aaaa : [] as $record) {
-			if (is_string($record['ipv6'] ?? null)) {
-				$addresses[] = $record['ipv6'];
+		$records = @dns_get_record($host, DNS_A + DNS_AAAA);
+		foreach (is_array($records) ? $records : [] as $record) {
+			$ip = $record['ip'] ?? $record['ipv6'] ?? null;
+			if (is_string($ip)) {
+				$addresses[] = $ip;
 			}
 		}
 
-		return $addresses;
+		return array_values(array_unique($addresses));
 	}
 
 	/**
@@ -101,6 +108,12 @@ final class FreshMcp_UrlPolicy {
 		$packed = @inet_pton($ip);
 		if (!is_string($packed)) {
 			return false;
+		}
+
+		if (strlen($packed) === 16 && self::inBlock($packed, '64:ff9b::', 96)) {
+			// NAT64 (RFC 6052): the address is as public as the IPv4 one it carries. On an IPv6-only
+			// network with DNS64, that is how every IPv4-only site resolves.
+			return self::isPublic((string) inet_ntop(substr($packed, 12, 4)));
 		}
 
 		return !self::inAny($packed, strlen($packed) === 4 ? self::BLOCKED_V4 : self::BLOCKED_V6);

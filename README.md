@@ -143,6 +143,7 @@ endpoint wants to work anyway:
 | `params._meta` names `2026-07-28` | the handshakeless era: `server/discover`, `resultType`, cache hints |
 | `MCP-Protocol-Version: 2025-11-25` … `2024-11-05` | the handshake era, under the revision named |
 | nothing names a version | `2025-03-26`, the last revision before the version header existed |
+| `initialize` asking for a revision this server does not speak, or for `2026-07-28` | answered with `2025-11-25`, as the handshake revisions require; the client decides whether to go on |
 
 **The modern era.** `server/discover` answers with `supportedVersions`, `capabilities`, the server
 identity under `_meta['io.modelcontextprotocol/serverInfo']`, `instructions`, and the cache fields
@@ -184,9 +185,9 @@ and, ideally, not be world-readable.
 | Tool | What it gives back | Arguments |
 | --- | --- | --- |
 | `list_feeds` | every feed, grouped by category, with unread counts | `category` filters by name, `include_totals` adds stored counts, `include_hidden` adds hidden feeds |
-| `get_unread` | the unread queue: id, title, link, feed, publication time | `feed_id` / `category_id` narrow it, plus the paging arguments below |
+| `get_unread` | the unread queue: id, title, link, feed, publication time | `feed_id` or `category_id` (not both) narrows it, plus the paging arguments below |
 | `search` | the same shape, over all stored entries | `query` (required) in FreshRSS syntax, `unread_only`, plus the paging arguments |
-| `get_article` | one entry as plain text | `id`, or `feed_id` + `guid`; `max_chars`; `fetch_full_content` |
+| `get_article` | one entry as plain text | `id`, or `feed_id` + `guid` (not both); `max_chars`; `fetch_full_content` (feeds with an article CSS selector only) |
 | `feed_stats` | totals plus the ten noisiest feeds | none |
 
 Shared by `get_unread` and `search`: `limit` (default 20, max 100), `since`, `until`, `sort` (`date`
@@ -295,14 +296,21 @@ would see when logged in.
   looks like a secret is written there: usernames appear only where FreshRSS itself would name them.
 * No CSRF token and no cookie is involved: the endpoint is a plain authenticated API, and it answers
   `405` to anything but POST.
-* **`fetch_full_content` is the one outbound request.** FreshRSS fetches the article page for feeds
-  that publish a teaser only, and the URL it fetches comes from a feed rather than from us. It is
+* **`fetch_full_content` is the one outbound request.** FreshRSS fetches the article page and extracts
+  the text with the feed's article CSS selector, so it works only for feeds that have one set; any
+  other feed gets a refusal that says so. The URL comes from a feed rather than from us, so it is
   checked first: `http` and `https` only, no credentials in the URL, and every address the host
   resolves to must be public — private, loopback, link-local, CGNAT, multicast and reserved ranges are
-  refused, so this endpoint will not read the LAN, the router or a cloud metadata address on behalf of
-  a publisher. What this cannot cover is that FreshRSS then resolves the name again and follows
-  redirections: a host that must never be reachable this way belongs on a different network, not
-  merely on another port.
+  refused, as is a NAT64 address carrying one of them, so this endpoint will not read the LAN, the
+  router or a cloud metadata address on behalf of a publisher. FreshRSS then makes the request, checks
+  every redirection against its own private-range rules and pins the connection to the addresses it
+  checked. Two FreshRSS settings weaken that, and this check then covers only the first URL: an
+  outbound proxy (FreshRSS checks the proxy's address, not the page's) and `internal_host_allowlist`.
+  A host that must never be reachable this way belongs on a different network, not merely on another
+  port.
+* **Refusals take the same time.** An account that does not exist, or has no API password, is refused
+  after the same bcrypt check a wrong password costs, so response times do not reveal which accounts
+  exist.
 * Replies carry `Cache-Control: no-store` and the tool catalogue advertises `cacheScope: 'private'`, so
   an intermediate cache is told the truth about content that belongs to one account.
 
@@ -365,7 +373,8 @@ turn a stray `echo` into a mystery bug.
   empty array as the empty object it usually is — a request with `"params": {}` is an ordinary
   request — and only rejects a list that actually has members.
 * `FreshRSS_EntryDAO::listWhere()` starts a continuation page *at* the entry named by the token, so
-  ask for one row more than you return and drop the first. With `sort: 'date'` the DAO also needs that
+  ask for one row more than you return and drop the first, but only when it is the token's entry: in an
+  unread queue that entry may have been read since, and is then not returned at all. With `sort: 'date'` the DAO also needs that
   entry's date as `continuation_values[0]`, which is why the token carries `id:date`.
 * A `Throwable` cannot be cloned in PHP, so `FreshMcp_ProtocolError::withId()` mutates and returns
   `$this`. One error answers one request, once, which is all the chaining has to survive.
@@ -375,6 +384,26 @@ turn a stray `echo` into a mystery bug.
   `FreshMcp_Tools::reset()` because a PHP worker lives on to serve the next account.
 
 ## Changelog
+
+**0.3.1** — fixes from a review.
+
+* `get_article(fetch_full_content)` now actually fetches. It used to reload the stored text and
+  report success; it now forces FreshRSS to fetch, refuses feeds with no article CSS selector, and
+  reports a fetch that failed.
+* Paging no longer skips an unread entry when the entry a token points to was marked read or purged
+  between two pages.
+* `initialize` asking for a revision this server does not speak is answered with `2025-11-25` instead
+  of an error, as the handshake revisions require.
+* `feed_id` with `category_id`, an `id` with `feed_id`/`guid`, and `arguments` sent as a list are
+  refused instead of partly ignored.
+* An unknown account or one with no API password costs the same bcrypt check as a wrong password, so
+  timing no longer tells which accounts exist.
+* The URL check reads the same DNS records FreshRSS connects to, blocks `::/96` and `64:ff9b:1::/48`,
+  and judges a NAT64 address by the IPv4 address inside it.
+* The request body is read only up to the size limit; `_meta` on a result is merged rather than
+  replaced.
+* Tests: 86 URL-policy cases; the end-to-end suite checks for gaps between pages and for each refusal
+  above.
 
 **0.3.0** — a hardening pass over the whole surface.
 

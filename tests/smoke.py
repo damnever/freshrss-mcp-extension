@@ -239,13 +239,23 @@ if entries:
     check('get_article includes body text', bool((art or {}).get('content')), str((art or {}).get('content'))[:80])
     check('get_article keeps the canonical link', bool((art or {}).get('link')))
 
-    status, parsed, art, _ = tool('get_article', {'id': article_id, 'fetch_full_content': True})
-    check('get_article can ask FreshRSS for the full page', bool(art) and art.get('id') == article_id)
+    status, parsed, art, text = tool('get_article', {'id': article_id, 'fetch_full_content': True})
+    # Only a feed with an article CSS selector can be fetched; any other says so instead of
+    # pretending it fetched.
+    check('get_article fetches the full page, or says why it cannot',
+          (bool(art) and art.get('id') == article_id) or
+          ((parsed or {}).get('result', {}).get('isError') is True and 'CSS selector' in text), text[:200])
+    status, parsed, _, text = tool('get_article', {'id': article_id, 'guid': 'x', 'feed_id': entries[0]['feed_id']})
+    check('get_article refuses an id together with feed_id and guid',
+          (parsed or {}).get('result', {}).get('isError') is True, text[:160])
 
     feed_id = entries[0]['feed_id']
     status, parsed, data3, _ = tool('get_unread', {'feed_id': feed_id, 'limit': 5})
     narrowed = (data3 or {}).get('entries', [])
     check('get_unread narrows to one feed', all(e['feed_id'] == feed_id for e in narrowed) if narrowed else bool(narrowed))
+    status, parsed, _, text = tool('get_unread', {'feed_id': feed_id, 'category_id': 1})
+    check('get_unread refuses feed_id and category_id together',
+          (parsed or {}).get('result', {}).get('isError') is True, text[:160])
 
 status, parsed, data, text = tool('search', {'query': 'a'})
 check('search runs server-side', 'entries' in (data or {}), text[:200])
@@ -272,6 +282,18 @@ check('non-2.0 request is rejected', (parsed or {}).get('error', {}).get('code')
 
 status, parsed, data, text = tool('get_unread', {'limit': 5000})
 check('an absurd limit is refused politely', (parsed or {}).get('result', {}).get('isError') is True, str(parsed)[:160])
+
+status, parsed, text = post({'jsonrpc': '2.0', 'id': 2, 'method': 'tools/call',
+                             'params': {'name': 'feed_stats', 'arguments': ['x']}})
+check('arguments given as a list are refused, not read as none',
+      (parsed or {}).get('error', {}).get('code') == -32602, f'HTTP {status} {text[:160]}')
+
+for asked, expected in (('1999-01-01', '2025-11-25'), (MODERN, '2025-11-25'), ('2024-11-05', '2024-11-05')):
+    status, parsed, _ = post({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {
+        'protocolVersion': asked, 'capabilities': {}, 'clientInfo': {'name': 'smoke', 'version': '0'}}})
+    got = (parsed or {}).get('result', {}).get('protocolVersion')
+    check(f'initialize asking for {asked} is answered with {expected}', status == 200 and got == expected,
+          f'HTTP {status} {str(parsed)[:160]}')
 
 status, parsed, data, text = tool('get_article', {'id': '999999999999'})
 check('a missing entry is a tool error, not a crash', (parsed or {}).get('result', {}).get('isError') is True, str(parsed)[:160])
@@ -472,6 +494,13 @@ if token:
         check(f'{label} is refused', (parsed or {}).get('result', {}).get('isError') is True, text[:160])
         check(f'{label} is refused in JSON and not with a PHP warning',
               parsed is not None and 'Warning' not in text and 'Fatal' not in text, text[:160])
+
+    status, parsed, whole, _ = tool('get_unread', {'limit': 4})
+    status, parsed, rest, text = tool('get_unread', {'limit': 2, 'continuation': token})
+    first_ids = [e['id'] for e in (whole or {}).get('entries', [])]
+    rest_ids = [e['id'] for e in (rest or {}).get('entries', [])]
+    check('the next page starts right after the last one, with no entry skipped',
+          bool(rest_ids) and rest_ids == first_ids[2:4], f'{rest_ids} vs {first_ids}')
 
     status, parsed, data, text = tool('get_unread', {'limit': 2, 'continuation': token, 'sort': 'id'})
     check('a cursor from one sort order is not honoured in another',

@@ -31,6 +31,12 @@ declare(strict_types=1);
 final class FreshMcp_Auth {
 
 	/**
+	 * A bcrypt hash of nothing in particular, at the cost FreshRSS uses for its own
+	 * (FreshRSS_password_Util::BCRYPT_COST), checked against when there is no real one.
+	 */
+	private const DUMMY_HASH = '$2y$09$67Ma7J2TJMkemXtmDRWAmeWUCpd9i8ES8IIV6bgTpF0uggWzNX.tG';
+
+	/**
 	 * The FreshRSS username whose request this is, or null when it is not authenticated.
 	 *
 	 * Never throws, and never distinguishes one refusal from another to the caller: a name that
@@ -61,13 +67,36 @@ final class FreshMcp_Auth {
 		}
 		[$user, $secret] = $credentials;
 
+		$hash = self::apiPasswordHash($user);
+		if ($hash === null) {
+			// Pay for one bcrypt check all the same, so that a missing account takes as long to refuse
+			// as a wrong password: otherwise the response time is a list of the accounts.
+			password_verify($secret, self::DUMMY_HASH);
+			return null;
+		}
+
+		// Same derivation as p/api/greader.php, so one credential serves both APIs.
+		$token = sha1(FreshRSS_Context::systemConf()->salt . $user . $hash);
+		if (!hash_equals($token, $secret) && !password_verify($secret, $hash)) {
+			Minz_Log::warning('MCP: rejected the API credentials of the account ' . $user);
+			return null;
+		}
+
+		return $user;
+	}
+
+	/**
+	 * The API password hash of an account that may use the API, or null when there is none.
+	 *
+	 * @throws Throwable see check()
+	 */
+	private static function apiPasswordHash(string $user): ?string {
 		if ($user === Minz_User::INTERNAL_USER || FreshRSS_user_Controller::checkUsername($user) !== true) {
 			Minz_Log::warning('MCP: an API request named an account that is not a FreshRSS user name');
 			return null;
 		}
 		if (!FreshRSS_UserDAO::exists($user)) {
-			// Checked before anything is loaded for it, so that an absent account costs the same
-			// answer as a wrong password.
+			// Checked before anything is loaded for it.
 			Minz_Log::warning('MCP: an API request named the account ' . $user . ', which does not exist');
 			return null;
 		}
@@ -87,14 +116,7 @@ final class FreshMcp_Auth {
 			return null;
 		}
 
-		// Same derivation as p/api/greader.php, so one credential serves both APIs.
-		$token = sha1(FreshRSS_Context::systemConf()->salt . $user . $hash);
-		if (!hash_equals($token, $secret) && !password_verify($secret, $hash)) {
-			Minz_Log::warning('MCP: rejected the API credentials of the account ' . $user);
-			return null;
-		}
-
-		return $user;
+		return $hash;
 	}
 
 	/**

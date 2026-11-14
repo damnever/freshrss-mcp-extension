@@ -121,6 +121,11 @@ final class FreshMcp_Tools {
 						'ones. Costs an extra query per feed, so it is off by default.'],
 					'include_hidden' => ['type' => 'boolean', 'description' => 'Also list feeds hidden from the reader.'],
 				]],
+				'annotations' => [
+					'readOnlyHint' => true,
+					'idempotentHint' => true,
+					'openWorldHint' => false,
+				],
 			],
 			'get_unread' => [
 				'title' => 'Unread queue',
@@ -130,6 +135,11 @@ final class FreshMcp_Tools {
 					'feed_id' => ['type' => 'integer', 'description' => 'Limit to one feed (see list_feeds).'],
 					'category_id' => ['type' => 'integer', 'description' => 'Limit to one category (see list_feeds).'],
 				]],
+				'annotations' => [
+					'readOnlyHint' => true,
+					'idempotentHint' => true,
+					'openWorldHint' => false,
+				],
 			],
 			'search' => [
 				'title' => 'Search entries',
@@ -147,6 +157,11 @@ final class FreshMcp_Tools {
 						'an argument and not a search operator, because FreshRSS keeps read and unread as a state of '
 						. 'the entry rather than as part of a query.'],
 				], 'required' => ['query']],
+				'annotations' => [
+					'readOnlyHint' => true,
+					'idempotentHint' => true,
+					'openWorldHint' => false,
+				],
 			],
 			'get_article' => [
 				'title' => 'Read one entry',
@@ -163,6 +178,11 @@ final class FreshMcp_Tools {
 						'and https links that resolve to public addresses are fetched, and anything on a private, ' .
 						'loopback or link-local address is refused.'],
 				]],
+				'annotations' => [
+					'readOnlyHint' => true,
+					'idempotentHint' => true,
+					'openWorldHint' => true,
+				],
 			],
 			'feed_stats' => [
 				'title' => 'Account summary',
@@ -170,6 +190,11 @@ final class FreshMcp_Tools {
 					'plus the ten noisiest feeds. Cheap way to start a triage conversation.',
 				// An empty object and not an empty list: a JSON Schema is an object even with no properties.
 				'inputSchema' => ['type' => 'object', 'properties' => new stdClass()],
+				'annotations' => [
+					'readOnlyHint' => true,
+					'idempotentHint' => true,
+					'openWorldHint' => false,
+				],
 			],
 		];
 	}

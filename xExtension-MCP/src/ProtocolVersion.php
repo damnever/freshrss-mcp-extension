@@ -89,8 +89,11 @@ final class FreshMcp_ProtocolVersion {
 	}
 
 	/**
-	 * The `_meta` fields a modern request has to carry. Of the three protocol
-	 * fields, clientInfo is the one the specification leaves optional.
+	 * The `_meta` fields a modern request has to carry, and the shape they have to be in.
+	 *
+	 * Of the three protocol fields, the specification leaves clientInfo optional. A JSON object and a
+	 * JSON array both decode to a PHP array, so what is checked is that something object-like arrived
+	 * and that the strings inside it are strings, not that it was written with braces.
 	 *
 	 * @param array<string,mixed> $meta
 	 */
@@ -98,10 +101,31 @@ final class FreshMcp_ProtocolVersion {
 		if (!$this->isModern()) {
 			return null;
 		}
-		if (!isset($meta[self::META_CLIENT_CAPABILITIES]) || !is_array($meta[self::META_CLIENT_CAPABILITIES])) {
+
+		$capabilities = $meta[self::META_CLIENT_CAPABILITIES] ?? null;
+		if ($capabilities === null) {
 			return FreshMcp_ProtocolError::invalidParams('params._meta must carry ' .
 				self::META_CLIENT_CAPABILITIES . '.');
 		}
+		if (!is_array($capabilities)) {
+			return FreshMcp_ProtocolError::invalidParams('params._meta[' . self::META_CLIENT_CAPABILITIES .
+				'] must be an object.');
+		}
+
+		$info = $meta[self::META_CLIENT_INFO] ?? null;
+		if ($info !== null) {
+			if (!is_array($info)) {
+				return FreshMcp_ProtocolError::invalidParams('params._meta[' . self::META_CLIENT_INFO .
+					'] must be an object.');
+			}
+			foreach (['name', 'version'] as $field) {
+				if (isset($info[$field]) && !is_string($info[$field])) {
+					return FreshMcp_ProtocolError::invalidParams('params._meta[' . self::META_CLIENT_INFO . '].' .
+						$field . ' must be a string.');
+				}
+			}
+		}
+
 		return null;
 	}
 

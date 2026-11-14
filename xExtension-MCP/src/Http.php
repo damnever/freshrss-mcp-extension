@@ -16,7 +16,9 @@ final class FreshMcp_Http {
 	private static ?array $headers = null;
 
 	public static function method(): string {
-		return strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+		$method = $_SERVER['REQUEST_METHOD'] ?? '';
+
+		return is_string($method) ? strtoupper($method) : '';
 	}
 
 	/**
@@ -25,6 +27,48 @@ final class FreshMcp_Http {
 	 */
 	public static function header(string $name): string {
 		return self::headers()[strtolower($name)] ?? '';
+	}
+
+	/**
+	 * Whether the client will take a JSON answer, judged from its Accept header.
+	 *
+	 * A client that asks only for something this endpoint cannot send, text/event-stream most
+	 * often, is told so with 406 rather than handed JSON it said it does not want.
+	 */
+	public static function acceptsJson(): bool {
+		$accept = self::header('accept');
+		if ($accept === '') {
+			// No Accept header means any media type will do.
+			return true;
+		}
+		foreach (explode(',', $accept) as $range) {
+			$parts = explode(';', $range);
+			$type = strtolower(trim($parts[0]));
+			if ($type === '' || !self::wanted($parts)) {
+				continue;
+			}
+			if ($type === '*/*' || $type === 'application/*' || $type === 'application/json') {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Whether the client still wants a type after its parameters, `q=0` being how it says it does not.
+	 *
+	 * @param list<string> $params the type and its parameters
+	 */
+	private static function wanted(array $params): bool {
+		foreach (array_slice($params, 1) as $parameter) {
+			$parameter = trim($parameter);
+			if (stripos($parameter, 'q=') === 0) {
+				return (float) substr($parameter, 2) > 0;
+			}
+		}
+
+		return true;
 	}
 
 	/**
@@ -78,6 +122,41 @@ final class FreshMcp_Http {
 	}
 
 	/**
+	 * A decoded JSON value as a member-name-keyed array, or null when it is not one.
+	 *
+	 * json_decode() hands an object over as a PHP array and, because PHP turns a member called `0`
+	 * into an integer key, that array is not keyed by strings alone. Nothing downstream should have to
+	 * wonder about that, and a message whose member names are not names is not a request.
+	 *
+	 * @return array<string,mixed>|null
+	 */
+	public static function object(mixed $value): ?array {
+		if (!is_array($value)) {
+			return null;
+		}
+		if ($value === []) {
+			// Decoded with the associative flag, `{}` and `[]` are the same empty PHP array, and a request
+			// with nothing in its params is ordinary: a ping with no params and a ping with an empty object
+			// of one are the same request. Only a list with members is certainly not an object.
+			return [];
+		}
+		if (array_is_list($value)) {
+			return null;
+		}
+
+		$object = [];
+		foreach ($value as $key => $member) {
+			$name = is_int($key) ? (string) $key : $key;
+			if (!is_string($name)) {
+				return null;
+			}
+			$object[$name] = $member;
+		}
+
+		return $object;
+	}
+
+	/**
 	 * @param array<string,mixed>|stdClass $result
 	 * @return array<string,mixed> a JSON-RPC 2.0 result envelope
 	 */
@@ -95,9 +174,11 @@ final class FreshMcp_Http {
 			// into underscores, and that is the one form every SAPI agrees on. These are the
 			// only headers this endpoint reads.
 			foreach ($_SERVER as $key => $value) {
-				if (str_starts_with((string) $key, 'HTTP_')) {
-					$found[strtolower(str_replace('_', '-', substr((string) $key, 5)))] = trim((string) $value);
+				if (!is_scalar($value) || !str_starts_with(strval($key), 'HTTP_')) {
+					continue;
 				}
+				$name = strtolower(str_replace('_', '-', substr(strval($key), 5)));
+				$found[$name] = trim(strval($value));
 			}
 			self::$headers = $found;
 		}

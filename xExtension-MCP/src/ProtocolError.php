@@ -71,6 +71,11 @@ final class FreshMcp_ProtocolError extends Exception implements JsonSerializable
 		return $error->withData(['supported' => $supported, 'requested' => $requested]);
 	}
 
+	/** The client will not accept the only media type this endpoint answers in. */
+	public static function notAcceptable(string $message): self {
+		return new self(self::INVALID_REQUEST, $message, 406);
+	}
+
 	public static function internal(string $message): self {
 		return new self(self::INTERNAL_ERROR, $message, 500);
 	}
@@ -107,7 +112,6 @@ final class FreshMcp_ProtocolError extends Exception implements JsonSerializable
 	/**
 	 * @return array<string,mixed>
 	 */
-	#[\Override]
 	public function jsonSerialize(): array {
 		$error = ['code' => $this->getCode(), 'message' => $this->getMessage()];
 		if ($this->data !== null) {

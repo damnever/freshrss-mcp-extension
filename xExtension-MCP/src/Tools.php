@@ -158,9 +158,10 @@ final class FreshMcp_Tools {
 					'max_chars' => ['type' => 'integer', 'description' => 'Truncate the body to this many characters, 1-' .
 						self::MAX_MAX_CHARS . ' (default ' . self::DEFAULT_MAX_CHARS . ').'],
 					'fetch_full_content' => ['type' => 'boolean', 'description' => 'Ask FreshRSS to retrieve the article from ' .
-						'its web page, for feeds that only publish a teaser. Slower, and it makes the server contact the ' .
-						'publisher: only http and https links that resolve to public addresses are fetched, and anything ' .
-						'on a private, loopback or link-local address is refused.'],
+						'its web page, for feeds that only publish a teaser. Works only for feeds that have an article ' .
+						'CSS selector set in FreshRSS. Slower, and it makes the server contact the publisher: only http ' .
+						'and https links that resolve to public addresses are fetched, and anything on a private, ' .
+						'loopback or link-local address is refused.'],
 				]],
 			],
 			'feed_stats' => [
@@ -453,6 +454,11 @@ final class FreshMcp_Tools {
 			$booleanSearch->add($extra);
 		}
 
+		if ($feedId !== null && $categoryId !== null) {
+			throw new InvalidArgumentException('Give feed_id or category_id, not both: a feed already belongs to '
+				. 'one category, so the two can only agree or exclude everything.');
+		}
+
 		// A feed narrows the query, a category narrows the SQL join; both keep any search terms.
 		$type = 'A';
 		$id = 0;
@@ -485,7 +491,10 @@ final class FreshMcp_Tools {
 			sort: $sort, order: 'DESC', continuation_id: $continuationId, continuation_values: $continuationValues,
 			limit: $limit + ($resumed ? 2 : 1)), false);
 
-		if ($resumed) {
+		// Drop the token's own entry only when it actually came back. It does not when it was marked
+		// read between two pages of an unread queue, or purged, and the first row is then one the
+		// client has never seen.
+		if ($resumed && $rows !== [] && (string) $rows[0]->id() === $continuationId) {
 			array_shift($rows);
 		}
 		$hasMore = count($rows) > $limit;
@@ -524,6 +533,10 @@ final class FreshMcp_Tools {
 		$feedId = self::intOpt($arguments, 'feed_id');
 		$guid = self::stringArg($arguments, 'guid', '');
 
+		if ($id !== '' && ($feedId !== null || $guid !== '')) {
+			throw new InvalidArgumentException('Give get_article an id, or feed_id and guid, not both.');
+		}
+
 		$entryDAO = FreshRSS_Factory::createEntryDao();
 		if ($id !== '') {
 			$entry = ctype_digit($id) ? $entryDAO->searchById($id) : null;
@@ -537,13 +550,7 @@ final class FreshMcp_Tools {
 		}
 
 		if (self::boolArg($arguments, 'fetch_full_content', false)) {
-			// Asks the publisher for the page, for feeds that only deliver a teaser. The URL comes from
-			// the feed, so it is checked before anything connects to it.
-			$refusal = FreshMcp_UrlPolicy::refusal(htmlspecialchars_decode($entry->link(), ENT_QUOTES));
-			if ($refusal !== null) {
-				throw new InvalidArgumentException($refusal);
-			}
-			$entry->loadCompleteContent();
+			self::fetchFullContent($entry);
 		}
 
 		$result = self::entrySummary($entry, self::feedTitles());
@@ -560,6 +567,34 @@ final class FreshMcp_Tools {
 		$result['content'] = self::toText($entry->content(false), $maxChars);
 
 		return $result;
+	}
+
+	/**
+	 * Ask the publisher for the page, for feeds that only deliver a teaser, and keep the result in
+	 * memory only: nothing is written back to the database.
+	 *
+	 * FreshRSS extracts the article with the feed's own CSS selector, so without one there is nothing
+	 * it can do. It has to be forced, too: unforced, FreshRSS finds the entry already stored and only
+	 * reloads what it has. The URL comes from the feed, so it is checked before anything connects to
+	 * it; FreshRSS then checks every redirection again itself and pins the connection to the
+	 * addresses it checked.
+	 */
+	private static function fetchFullContent(FreshRSS_Entry $entry): void {
+		$feed = $entry->feed();
+		if ($feed === null || trim($feed->pathEntries()) === '') {
+			throw new InvalidArgumentException('This feed has no article CSS selector set in FreshRSS (feed settings, '
+				. 'Advanced), so FreshRSS cannot extract the full article from the page. Leave fetch_full_content off '
+				. 'and use the text the feed sent, or set the selector in FreshRSS first.');
+		}
+
+		$refusal = FreshMcp_UrlPolicy::refusal(htmlspecialchars_decode($entry->link(), ENT_QUOTES));
+		if ($refusal !== null) {
+			throw new InvalidArgumentException($refusal);
+		}
+		if (!$entry->loadCompleteContent(true)) {
+			throw new InvalidArgumentException('FreshRSS could not retrieve the full article: the page did not load, '
+				. 'or the feed\'s CSS selector matched nothing on it. Leave fetch_full_content off to read the stored text.');
+		}
 	}
 
 	/**

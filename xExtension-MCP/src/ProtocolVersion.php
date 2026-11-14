@@ -25,6 +25,9 @@ final class FreshMcp_ProtocolVersion {
 
 	public const LATEST = self::SUPPORTED[0];
 
+	/** The newest revision that still opens with `initialize`. */
+	public const LATEST_HANDSHAKE = self::SUPPORTED[1];
+
 	/** From this revision on, requests carry their own metadata and there is no handshake. */
 	private const MODERN_FROM = '2026-07-28';
 
@@ -51,13 +54,24 @@ final class FreshMcp_ProtocolVersion {
 	/**
 	 * Work out the revision a request wants, or the error to answer with.
 	 *
+	 * @param string $method the method of the request
 	 * @param array<string,mixed> $params the params of the request
 	 * @param array<string,mixed> $meta params._meta of the request
 	 * @return array{0: ?self, 1: ?FreshMcp_ProtocolError} either the version or the refusal
 	 */
-	public static function negotiate(array $params, array $meta, string $headerVersion): array {
+	public static function negotiate(string $method, array $params, array $meta, string $headerVersion): array {
 		$inMeta = self::text($meta[self::META_PROTOCOL_VERSION] ?? null);
 		$inParams = self::text($params['protocolVersion'] ?? null);
+
+		if ($method === 'initialize' && $inMeta === null && $headerVersion === '') {
+			// A handshake. Up to 2025-11-25 the server answers a version it does not speak with one it
+			// does, rather than with an error, and lets the client decide whether to go on. A handshake
+			// is by definition the old era, so asking it for a modern revision gets the newest old one.
+			if ($inParams !== null && self::isSupported($inParams) && !(new self($inParams))->isModern()) {
+				return [new self($inParams), null];
+			}
+			return [new self(self::LATEST_HANDSHAKE), null];
+		}
 
 		if ($inMeta !== null && $headerVersion !== '' && $inMeta !== $headerVersion) {
 			return [null, FreshMcp_ProtocolError::headerMismatch('MCP-Protocol-Version says ' . $headerVersion .
@@ -146,7 +160,8 @@ final class FreshMcp_ProtocolVersion {
 			$meta = [];
 		}
 		$meta[self::META_SERVER_INFO] ??= $serverInfo;
-		return ['resultType' => 'complete'] + $result + ['_meta' => $meta];
+		$result['_meta'] = $meta;
+		return ['resultType' => 'complete'] + $result;
 	}
 
 	private static function text(mixed $value): ?string {

@@ -113,7 +113,7 @@ final class FreshMcp_Server {
 		$meta = FreshMcp_Http::object($params['_meta'] ?? []) ??
 			throw FreshMcp_ProtocolError::invalidParams('_meta must be an object.');
 
-		[$version, $error] = FreshMcp_ProtocolVersion::negotiate($params, $meta,
+		[$version, $error] = FreshMcp_ProtocolVersion::negotiate($method, $params, $meta,
 			FreshMcp_Http::header('MCP-Protocol-Version'));
 		if ($version === null || $error !== null) {
 			throw $error ?? FreshMcp_ProtocolError::invalidRequest('Could not agree a protocol version.');
@@ -260,11 +260,8 @@ final class FreshMcp_Server {
 		if (!FreshMcp_Tools::exists($name)) {
 			throw FreshMcp_ProtocolError::invalidParams("Unknown tool: {$name}");
 		}
-		$raw = $params['arguments'] ?? null;
-		if ($raw !== null && !is_array($raw)) {
+		$arguments = FreshMcp_Http::object($params['arguments'] ?? []) ??
 			throw FreshMcp_ProtocolError::invalidParams('arguments must be an object.');
-		}
-		$arguments = FreshMcp_Http::object($raw ?? []) ?? [];
 		return FreshMcp_Tools::call($name, $arguments);
 	}
 

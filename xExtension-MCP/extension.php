@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /**
- * Model Context Protocol (MCP) server for FreshRSS, read-only.
+ * Model Context Protocol (MCP) server for FreshRSS: read, triage, and manage subscriptions.
  *
  * FreshRSS routes extension-owned HTTP requests to `p/api/misc.php`, which fires the
  * `api_misc` hook for the extension named in the URL:
@@ -14,7 +14,7 @@ declare(strict_types=1);
  * with a FreshRSS API password before any data is touched. See src/Auth.php.
  */
 final class MCPExtension extends Minz_Extension {
-	public const VERSION = '0.3.2';
+	public const VERSION = '0.4.0';
 
 	/** Class name prefix of the files in src/, used by the autoloader below. */
 	public const CLASS_PREFIX = 'FreshMcp_';

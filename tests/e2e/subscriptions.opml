@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head><title>e2e fixtures</title></head>
+  <body>
+    <outline text="Tech">
+      <outline type="rss" text="Alpha News" xmlUrl="http://feeds/alpha.xml" htmlUrl="http://feeds/alpha/"/>
+    </outline>
+    <outline text="Life">
+      <outline type="rss" text="Beta Blog" xmlUrl="http://feeds/beta.xml" htmlUrl="http://feeds/beta/"/>
+    </outline>
+  </body>
+</opml>

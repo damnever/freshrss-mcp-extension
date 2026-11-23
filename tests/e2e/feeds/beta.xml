@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Beta Blog</title>
+    <link>http://feeds/beta/</link>
+    <description>Fixture feed Beta Blog</description>
+    <item>
+      <title>Beta Blog item 1: notes on topic1</title>
+      <link>http://feeds/beta/1.html</link>
+      <guid isPermaLink="false">beta-1</guid>
+      <pubDate>Sun, 23 Nov 2025 00:30:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Beta Blog item 1, about topic1 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Beta Blog item 2: notes on topic2</title>
+      <link>http://feeds/beta/2.html</link>
+      <guid isPermaLink="false">beta-2</guid>
+      <pubDate>Sun, 23 Nov 2025 01:30:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Beta Blog item 2, about topic2 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Beta Blog item 3: notes on topic3</title>
+      <link>http://feeds/beta/3.html</link>
+      <guid isPermaLink="false">beta-3</guid>
+      <pubDate>Sun, 23 Nov 2025 02:30:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Beta Blog item 3, about topic3 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Beta Blog item 4: notes on topic4</title>
+      <link>http://feeds/beta/4.html</link>
+      <guid isPermaLink="false">beta-4</guid>
+      <pubDate>Sun, 23 Nov 2025 03:30:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Beta Blog item 4, about topic4 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Beta Blog item 5: notes on topic5</title>
+      <link>http://feeds/beta/5.html</link>
+      <guid isPermaLink="false">beta-5</guid>
+      <pubDate>Sun, 23 Nov 2025 04:30:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Beta Blog item 5, about topic5 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Beta Blog item 6: notes on topic6</title>
+      <link>http://feeds/beta/6.html</link>
+      <guid isPermaLink="false">beta-6</guid>
+      <pubDate>Sun, 23 Nov 2025 05:30:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Beta Blog item 6, about topic6 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Beta Blog item 7: notes on topic7</title>
+      <link>http://feeds/beta/7.html</link>
+      <guid isPermaLink="false">beta-7</guid>
+      <pubDate>Sun, 23 Nov 2025 06:30:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Beta Blog item 7, about topic7 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Beta Blog item 8: notes on topic8</title>
+      <link>http://feeds/beta/8.html</link>
+      <guid isPermaLink="false">beta-8</guid>
+      <pubDate>Sun, 23 Nov 2025 07:30:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Beta Blog item 8, about topic8 and gardening.&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>

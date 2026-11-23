@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Alpha News</title>
+    <link>http://feeds/alpha/</link>
+    <description>Fixture feed Alpha News</description>
+    <item>
+      <title>Alpha News item 1: notes on topic1</title>
+      <link>http://feeds/alpha/1.html</link>
+      <guid isPermaLink="false">alpha-1</guid>
+      <pubDate>Sun, 23 Nov 2025 00:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 1, about topic1 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 2: notes on topic2</title>
+      <link>http://feeds/alpha/2.html</link>
+      <guid isPermaLink="false">alpha-2</guid>
+      <pubDate>Sun, 23 Nov 2025 01:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 2, about topic2 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 3: notes on topic3</title>
+      <link>http://feeds/alpha/3.html</link>
+      <guid isPermaLink="false">alpha-3</guid>
+      <pubDate>Sun, 23 Nov 2025 02:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 3, about topic3 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 4: notes on topic4</title>
+      <link>http://feeds/alpha/4.html</link>
+      <guid isPermaLink="false">alpha-4</guid>
+      <pubDate>Sun, 23 Nov 2025 03:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 4, about topic4 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 5: notes on topic5</title>
+      <link>http://feeds/alpha/5.html</link>
+      <guid isPermaLink="false">alpha-5</guid>
+      <pubDate>Sun, 23 Nov 2025 04:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 5, about topic5 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 6: notes on topic6</title>
+      <link>http://feeds/alpha/6.html</link>
+      <guid isPermaLink="false">alpha-6</guid>
+      <pubDate>Sun, 23 Nov 2025 05:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 6, about topic6 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 7: notes on topic7</title>
+      <link>http://feeds/alpha/7.html</link>
+      <guid isPermaLink="false">alpha-7</guid>
+      <pubDate>Sun, 23 Nov 2025 06:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 7, about topic7 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 8: notes on topic8</title>
+      <link>http://feeds/alpha/8.html</link>
+      <guid isPermaLink="false">alpha-8</guid>
+      <pubDate>Sun, 23 Nov 2025 07:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 8, about topic8 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 9: notes on topic9</title>
+      <link>http://feeds/alpha/9.html</link>
+      <guid isPermaLink="false">alpha-9</guid>
+      <pubDate>Sun, 23 Nov 2025 08:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 9, about topic9 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 10: notes on topic10</title>
+      <link>http://feeds/alpha/10.html</link>
+      <guid isPermaLink="false">alpha-10</guid>
+      <pubDate>Sun, 23 Nov 2025 09:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 10, about topic10 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 11: notes on topic11</title>
+      <link>http://feeds/alpha/11.html</link>
+      <guid isPermaLink="false">alpha-11</guid>
+      <pubDate>Sun, 23 Nov 2025 10:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 11, about topic11 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 12: notes on topic12</title>
+      <link>http://feeds/alpha/12.html</link>
+      <guid isPermaLink="false">alpha-12</guid>
+      <pubDate>Sun, 23 Nov 2025 11:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 12, about topic12 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 13: notes on topic13</title>
+      <link>http://feeds/alpha/13.html</link>
+      <guid isPermaLink="false">alpha-13</guid>
+      <pubDate>Sun, 23 Nov 2025 12:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 13, about topic13 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 14: notes on topic14</title>
+      <link>http://feeds/alpha/14.html</link>
+      <guid isPermaLink="false">alpha-14</guid>
+      <pubDate>Sun, 23 Nov 2025 13:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 14, about topic14 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 15: notes on topic15</title>
+      <link>http://feeds/alpha/15.html</link>
+      <guid isPermaLink="false">alpha-15</guid>
+      <pubDate>Sun, 23 Nov 2025 14:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 15, about topic15 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 16: notes on topic16</title>
+      <link>http://feeds/alpha/16.html</link>
+      <guid isPermaLink="false">alpha-16</guid>
+      <pubDate>Sun, 23 Nov 2025 15:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 16, about topic16 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 17: notes on topic17</title>
+      <link>http://feeds/alpha/17.html</link>
+      <guid isPermaLink="false">alpha-17</guid>
+      <pubDate>Sun, 23 Nov 2025 16:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 17, about topic17 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 18: notes on topic18</title>
+      <link>http://feeds/alpha/18.html</link>
+      <guid isPermaLink="false">alpha-18</guid>
+      <pubDate>Sun, 23 Nov 2025 17:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 18, about topic18 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 19: notes on topic19</title>
+      <link>http://feeds/alpha/19.html</link>
+      <guid isPermaLink="false">alpha-19</guid>
+      <pubDate>Sun, 23 Nov 2025 18:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 19, about topic19 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 20: notes on topic20</title>
+      <link>http://feeds/alpha/20.html</link>
+      <guid isPermaLink="false">alpha-20</guid>
+      <pubDate>Sun, 23 Nov 2025 19:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 20, about topic20 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 21: notes on topic21</title>
+      <link>http://feeds/alpha/21.html</link>
+      <guid isPermaLink="false">alpha-21</guid>
+      <pubDate>Sun, 23 Nov 2025 20:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 21, about topic21 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 22: notes on topic22</title>
+      <link>http://feeds/alpha/22.html</link>
+      <guid isPermaLink="false">alpha-22</guid>
+      <pubDate>Sun, 23 Nov 2025 21:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 22, about topic22 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 23: notes on topic23</title>
+      <link>http://feeds/alpha/23.html</link>
+      <guid isPermaLink="false">alpha-23</guid>
+      <pubDate>Sun, 23 Nov 2025 22:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 23, about topic23 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 24: notes on topic24</title>
+      <link>http://feeds/alpha/24.html</link>
+      <guid isPermaLink="false">alpha-24</guid>
+      <pubDate>Sun, 23 Nov 2025 23:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 24, about topic24 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 25: notes on topic25</title>
+      <link>http://feeds/alpha/25.html</link>
+      <guid isPermaLink="false">alpha-25</guid>
+      <pubDate>Mon, 24 Nov 2025 00:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 25, about topic25 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 26: notes on topic26</title>
+      <link>http://feeds/alpha/26.html</link>
+      <guid isPermaLink="false">alpha-26</guid>
+      <pubDate>Mon, 24 Nov 2025 01:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 26, about topic26 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 27: notes on topic27</title>
+      <link>http://feeds/alpha/27.html</link>
+      <guid isPermaLink="false">alpha-27</guid>
+      <pubDate>Mon, 24 Nov 2025 02:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 27, about topic27 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 28: notes on topic28</title>
+      <link>http://feeds/alpha/28.html</link>
+      <guid isPermaLink="false">alpha-28</guid>
+      <pubDate>Mon, 24 Nov 2025 03:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 28, about topic28 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 29: notes on topic29</title>
+      <link>http://feeds/alpha/29.html</link>
+      <guid isPermaLink="false">alpha-29</guid>
+      <pubDate>Mon, 24 Nov 2025 04:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 29, about topic29 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Alpha News item 30: notes on topic30</title>
+      <link>http://feeds/alpha/30.html</link>
+      <guid isPermaLink="false">alpha-30</guid>
+      <pubDate>Mon, 24 Nov 2025 05:00:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Alpha News item 30, about topic30 and gardening.&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>

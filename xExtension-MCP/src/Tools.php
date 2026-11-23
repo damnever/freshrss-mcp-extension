@@ -2,11 +2,16 @@
 declare(strict_types=1);
 
 /**
- * The read-only tools offered to MCP clients, built on FreshRSS' own models.
+ * The tool catalogue offered to MCP clients, and the read tools themselves.
  *
- * Handlers return plain arrays which are serialised as JSON inside the tool result. Nothing here
- * writes: FreshRSS is only read through the same DAOs the web interface uses, so a client sees
- * exactly what that user would see when logged in.
+ * The read tools live here; the write tools live in one class per domain (EntryTools, LabelTools,
+ * SubscriptionTools), each declaring its own specs and running its own handlers. This class merges
+ * them into one catalogue and is the single place a call is checked and answered, so every tool,
+ * read or write, gets the same argument checks and the same error handling.
+ *
+ * Handlers return plain arrays which are serialised as JSON inside the tool result. Everything goes
+ * through the DAOs and controllers the web interface uses, so a client sees and changes exactly what
+ * that user would see and change when logged in.
  *
  * Every argument is checked against the schema advertised by `tools/list`, and anything the tool
  * cannot act on is refused with a message rather than quietly ignored. Both choices have the same
@@ -34,19 +39,41 @@ final class FreshMcp_Tools {
 	 */
 	private static array $categories = [];
 
+	/** The classes holding the write tools; each has specs() and run(). */
+	private const WRITE_MODULES = [FreshMcp_EntryTools::class, FreshMcp_LabelTools::class, FreshMcp_SubscriptionTools::class];
+
 	/** @return list<array<string,mixed>> */
 	public static function definitions(): array {
 		$definitions = [];
-		$outputs = self::outputs();
-		foreach (self::specs() as $name => $spec) {
-			$definitions[] = ['name' => $name] + $spec + ['outputSchema' => $outputs[$name]];
+		foreach (self::catalogue() as $name => [, $spec]) {
+			$definitions[] = ['name' => $name] + $spec;
 		}
 
 		return $definitions;
 	}
 
 	public static function exists(string $name): bool {
-		return array_key_exists($name, self::specs());
+		return array_key_exists($name, self::catalogue());
+	}
+
+	/**
+	 * Every tool by name, with the class that runs it and its full definition, outputSchema included.
+	 *
+	 * @return array<string, array{0: class-string, 1: array<string,mixed>}>
+	 */
+	private static function catalogue(): array {
+		$tools = [];
+		$outputs = self::outputs();
+		foreach (self::specs() as $name => $spec) {
+			$tools[$name] = [self::class, $spec + ['outputSchema' => $outputs[$name]]];
+		}
+		foreach (self::WRITE_MODULES as $module) {
+			foreach ($module::specs() as $name => $spec) {
+				$tools[$name] = [$module, $spec];
+			}
+		}
+
+		return $tools;
 	}
 
 	/**
@@ -76,6 +103,15 @@ final class FreshMcp_Tools {
 			// sentence rather than with a message that belongs to FreshRSS internals.
 			Minz_Log::warning('MCP: tool ' . $name . ' failed: ' . $e::class . ': ' . $e->getMessage());
 			return self::failure('FreshRSS could not carry out this request; see its logs.');
+		} finally {
+			// The web interface answers 304 Not Modified until the account's modification time moves.
+			// The entry DAOs move it themselves, the category and label ones do not, so a write tool
+			// moves it here, the way the web controllers do: otherwise an open browser tab keeps
+			// showing the subscription list as it was. A refused or failed write may have done part of
+			// its work, so it moves it too.
+			if ((self::catalogue()[$name][1]['annotations']['readOnlyHint'] ?? false) !== true) {
+				invalidateHttpCache(Minz_User::name() ?? '');
+			}
 		}
 
 		return self::success($name, $data);
@@ -91,6 +127,11 @@ final class FreshMcp_Tools {
 	 *         rather than guessed at here.
 	 */
 	private static function run(string $name, array $arguments): array {
+		$module = self::catalogue()[$name][0];
+		if ($module !== self::class) {
+			return $module::run($name, $arguments);
+		}
+
 		return match ($name) {
 			'list_feeds' => self::listFeeds($arguments),
 			'get_unread' => self::entries($arguments, true),
@@ -344,7 +385,7 @@ final class FreshMcp_Tools {
 	* @param list<string> $required
 	* @return array<string,mixed>
 	*/
-	private static function shape(array $properties, array $required): array {
+	public static function shape(array $properties, array $required): array {
 		return ['type' => 'object', 'properties' => $properties, 'required' => $required];
 	}
 
@@ -368,20 +409,24 @@ final class FreshMcp_Tools {
 	}
 
 	/**
-	 * Refuse arguments the tool does not take.
+	 * Refuse arguments the tool does not take, and calls missing one it requires.
 	 *
 	 * @param array<string,mixed> $arguments
 	 */
 	private static function checkArguments(string $name, array $arguments): void {
-		$properties = self::specs()[$name]['inputSchema']['properties'] ?? [];
+		$schema = self::catalogue()[$name][1]['inputSchema'];
+		$properties = $schema['properties'] ?? [];
 		$known = is_array($properties) ? array_keys($properties) : [];
 		$unknown = array_diff(array_map('strval', array_keys($arguments)), $known);
-		if ($unknown === []) {
-			return;
+		if ($unknown !== []) {
+			throw new InvalidArgumentException("{$name} has no argument named " . implode(', ', $unknown) . '. It takes ' .
+				($known === [] ? 'no arguments at all.' : implode(', ', $known) . '.'));
 		}
 
-		throw new InvalidArgumentException("{$name} has no argument named " . implode(', ', $unknown) . '. It takes ' .
-			($known === [] ? 'no arguments at all.' : implode(', ', $known) . '.'));
+		$missing = array_filter($schema['required'] ?? [], static fn(string $key): bool => ($arguments[$key] ?? null) === null);
+		if ($missing !== []) {
+			throw new InvalidArgumentException("{$name} needs " . implode(' and ', $missing) . '.');
+		}
 	}
 
 	/**
@@ -389,9 +434,9 @@ final class FreshMcp_Tools {
 	 * @return array<string,mixed>
 	 */
 	private static function listFeeds(array $arguments): array {
-		$needle = mb_strtolower(self::stringArg($arguments, 'category', ''));
-		$includeTotals = self::boolArg($arguments, 'include_totals', false);
-		$includeHidden = self::boolArg($arguments, 'include_hidden', false);
+		$needle = mb_strtolower(FreshMcp_Arguments::string($arguments, 'category', ''));
+		$includeTotals = FreshMcp_Arguments::bool($arguments, 'include_totals', false);
+		$includeHidden = FreshMcp_Arguments::bool($arguments, 'include_hidden', false);
 
 		$categories = [];
 		$feedCount = 0;
@@ -431,7 +476,7 @@ final class FreshMcp_Tools {
 	 * @return array<string,mixed>
 	 */
 	private static function search(array $arguments): array {
-		$query = self::stringArg($arguments, 'query', '');
+		$query = FreshMcp_Arguments::string($arguments, 'query', '');
 		if ($query === '') {
 			throw new InvalidArgumentException('search needs a query.');
 		}
@@ -443,7 +488,7 @@ final class FreshMcp_Tools {
 		// Whether to keep the unread ones is a state of the entry, so it is asked of the database and
 		// not written into the query. There is no `is:unread` operator, and inventing one leaves the
 		// words to be searched for as text, which matches nothing.
-		return self::entries($arguments + ['search' => $query], self::boolArg($arguments, 'unread_only', false));
+		return self::entries($arguments + ['search' => $query], FreshMcp_Arguments::bool($arguments, 'unread_only', false));
 	}
 
 	/**
@@ -453,14 +498,14 @@ final class FreshMcp_Tools {
 	 * @return array<string,mixed>
 	 */
 	private static function entries(array $arguments, bool $unreadOnly): array {
-		$limit = self::intArg($arguments, 'limit', self::DEFAULT_LIMIT, 1, self::MAX_LIMIT);
-		$maxChars = self::intArg($arguments, 'max_chars', self::DEFAULT_MAX_CHARS, 1, self::MAX_MAX_CHARS);
-		$withContent = self::boolArg($arguments, 'include_content', false);
+		$limit = FreshMcp_Arguments::int($arguments, 'limit', self::DEFAULT_LIMIT, 1, self::MAX_LIMIT);
+		$maxChars = FreshMcp_Arguments::int($arguments, 'max_chars', self::DEFAULT_MAX_CHARS, 1, self::MAX_MAX_CHARS);
+		$withContent = FreshMcp_Arguments::bool($arguments, 'include_content', false);
 		$sort = self::sort($arguments);
 
-		$search = self::stringArg($arguments, 'search', '');
-		$feedId = self::intOpt($arguments, 'feed_id');
-		$categoryId = self::intOpt($arguments, 'category_id');
+		$search = FreshMcp_Arguments::string($arguments, 'search', '');
+		$feedId = FreshMcp_Arguments::intOpt($arguments, 'feed_id');
+		$categoryId = FreshMcp_Arguments::intOpt($arguments, 'category_id');
 
 		$booleanSearch = new FreshRSS_BooleanSearch($search);
 		$extra = new FreshRSS_Search('');
@@ -496,11 +541,11 @@ final class FreshMcp_Tools {
 		}
 
 		$state = $unreadOnly ? FreshRSS_Entry::STATE_NOT_READ : FreshRSS_Entry::STATE_ALL;
-		$resumed = self::stringArg($arguments, 'continuation', '') !== '';
+		$resumed = FreshMcp_Arguments::string($arguments, 'continuation', '') !== '';
 		$continuationId = '0';
 		$continuationValues = [];
 		if ($resumed) {
-			$parsed = FreshMcp_Continuation::parse(self::stringArg($arguments, 'continuation', ''), $sort);
+			$parsed = FreshMcp_Continuation::parse(FreshMcp_Arguments::string($arguments, 'continuation', ''), $sort);
 			if ($parsed === null) {
 				throw new InvalidArgumentException('That continuation token was not issued by this server for this '
 					. 'account and this sort order. Ask for the first page again with no continuation.');
@@ -553,10 +598,10 @@ final class FreshMcp_Tools {
 	 * @return array<string,mixed>
 	 */
 	private static function article(array $arguments): array {
-		$maxChars = self::intArg($arguments, 'max_chars', self::DEFAULT_MAX_CHARS, 1, self::MAX_MAX_CHARS);
-		$id = self::stringArg($arguments, 'id', '');
-		$feedId = self::intOpt($arguments, 'feed_id');
-		$guid = self::stringArg($arguments, 'guid', '');
+		$maxChars = FreshMcp_Arguments::int($arguments, 'max_chars', self::DEFAULT_MAX_CHARS, 1, self::MAX_MAX_CHARS);
+		$id = FreshMcp_Arguments::string($arguments, 'id', '');
+		$feedId = FreshMcp_Arguments::intOpt($arguments, 'feed_id');
+		$guid = FreshMcp_Arguments::string($arguments, 'guid', '');
 
 		if ($id !== '' && ($feedId !== null || $guid !== '')) {
 			throw new InvalidArgumentException('Give get_article an id, or feed_id and guid, not both.');
@@ -574,7 +619,7 @@ final class FreshMcp_Tools {
 			throw new InvalidArgumentException('No such entry: it may have been purged, or it belongs to another user.');
 		}
 
-		if (self::boolArg($arguments, 'fetch_full_content', false)) {
+		if (FreshMcp_Arguments::bool($arguments, 'fetch_full_content', false)) {
 			self::fetchFullContent($entry);
 		}
 
@@ -716,7 +761,7 @@ final class FreshMcp_Tools {
 	}
 
 	private static function sort(array $arguments): string {
-		$sort = self::stringArg($arguments, 'sort', 'date');
+		$sort = FreshMcp_Arguments::string($arguments, 'sort', 'date');
 		if (!in_array($sort, self::SORTS, true)) {
 			throw new InvalidArgumentException('sort must be one of: ' . implode(', ', self::SORTS) . '.');
 		}
@@ -761,35 +806,6 @@ final class FreshMcp_Tools {
 		return ['content' => [['type' => 'text', 'text' => $message]], 'isError' => true];
 	}
 
-	/** @param array<string,mixed> $arguments */
-	private static function stringArg(array $arguments, string $name, string $default): string {
-		$value = $arguments[$name] ?? null;
-		if ($value === null) {
-			return $default;
-		}
-		if (!is_string($value)) {
-			throw new InvalidArgumentException("{$name} must be a string.");
-		}
-
-		return trim($value);
-	}
-
-	/** @param array<string,mixed> $arguments */
-	private static function intOpt(array $arguments, string $name): ?int {
-		$value = $arguments[$name] ?? null;
-		if ($value === null) {
-			return null;
-		}
-		if (is_int($value)) {
-			return $value;
-		}
-		if (is_string($value) && ctype_digit($value)) {
-			return (int) $value;
-		}
-
-		throw new InvalidArgumentException("{$name} must be an integer.");
-	}
-
 	/**
 	 * A Unix timestamp bound.
 	 *
@@ -799,7 +815,7 @@ final class FreshMcp_Tools {
 	 * @param array<string,mixed> $arguments
 	 */
 	private static function dateArg(array $arguments, string $name): ?int {
-		$value = self::intOpt($arguments, $name);
+		$value = FreshMcp_Arguments::intOpt($arguments, $name);
 		if ($value === null) {
 			return null;
 		}
@@ -809,31 +825,5 @@ final class FreshMcp_Tools {
 		}
 
 		return $value;
-	}
-
-	/** @param array<string,mixed> $arguments */
-	private static function intArg(array $arguments, string $name, int $default, int $min, int $max): int {
-		$value = self::intOpt($arguments, $name) ?? $default;
-		if ($value < $min || $value > $max) {
-			throw new InvalidArgumentException("{$name} must be between {$min} and {$max}.");
-		}
-
-		return $value;
-	}
-
-	/** @param array<string,mixed> $arguments */
-	private static function boolArg(array $arguments, string $name, bool $default): bool {
-		$value = $arguments[$name] ?? null;
-		if ($value === null) {
-			return $default;
-		}
-		if (is_bool($value)) {
-			return $value;
-		}
-		if ($value === 'true' || $value === 'false') {
-			return $value === 'true';
-		}
-
-		throw new InvalidArgumentException("{$name} must be a boolean.");
 	}
 }

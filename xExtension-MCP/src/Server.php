@@ -12,7 +12,7 @@ declare(strict_types=1);
  *
  * The era comes from the request in front of us and is remembered for nothing: a client may change
  * its mind between two requests, and the modern protocol keeps no server-side session, which suits
- * a PHP endpoint that starts from zero every time anyway. Both eras get the same five read-only tools.
+ * a PHP endpoint that starts from zero every time anyway. Both eras get the same tools.
  *
  * @see https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning
  * @see https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http
@@ -35,10 +35,13 @@ final class FreshMcp_Server {
 	private const CATALOGUE_SCOPE = 'private';
 
 	/** Guidance, put where each era reads it from. */
-	private const INSTRUCTIONS = 'Read-only access to a FreshRSS account. list_feeds gives the catalogue and the unread '
-		. 'counts, get_unread gives a triage queue that feed_id or category_id can narrow, search takes FreshRSS query '
-		. 'syntax and rejects anything it cannot filter on, and get_article returns the text of one entry. Nothing here '
-		. 'changes FreshRSS: marking items read or starring them stays with the user.';
+	private const INSTRUCTIONS = 'Read and write access to one FreshRSS account. To read: feed_stats and list_feeds give '
+		. 'the shape of the account, get_unread a triage queue that feed_id or category_id can narrow, search takes '
+		. 'FreshRSS query syntax and rejects anything it cannot filter on, get_article returns the text of one entry, '
+		. 'list_labels the labels. To triage: mark_read, set_starred and label_entries take the entry ids those tools '
+		. 'return; mark_all_read clears a feed, category or label at once. To organise: subscribe_feed, update_feed, '
+		. 'refresh_feed, unsubscribe_feed, and create/rename/delete for categories and labels. unsubscribe_feed deletes '
+		. 'the feed\'s entries for good and mark_all_read cannot be undone as a whole: confirm those with the user first.';
 
 	/** The id of the request being served, so that an error can be answered with it. */
 	private static string|int|null $id = null;
@@ -335,7 +338,7 @@ final class FreshMcp_Server {
 			'name' => self::NAME,
 			'title' => 'FreshRSS',
 			'version' => MCPExtension::VERSION,
-			'description' => 'Read-only Model Context Protocol server for FreshRSS feed triage.',
+			'description' => 'Model Context Protocol server for FreshRSS: read, triage and manage subscriptions.',
 			'websiteUrl' => 'https://github.com/samteezy/freshrss-mcp-extension',
 		];
 	}

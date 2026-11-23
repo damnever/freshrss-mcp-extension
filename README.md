@@ -2,9 +2,15 @@
 
 A [Model Context Protocol](https://modelcontextprotocol.io/) server that runs *inside* FreshRSS.
 It is an ordinary PHP system extension: no sidecar, no second container, no extra database. An MCP
-client that speaks Streamable HTTP can list the feeds, pull the unread queue, run a search, and read
-one article. Everything is read-only, and everything is scoped to the user whose API password the
-client was given.
+client that speaks Streamable HTTP can list the feeds, pull the unread queue, run a search and read
+an article; triage entries by marking them read, starring and labelling them; and manage the
+subscriptions: subscribe, rename, move, hide, refresh and unsubscribe feeds, and create, rename and
+delete categories and labels. Everything is scoped to the user whose API password the client was
+given.
+
+This is a fork of [samteezy/freshrss-mcp-extension](https://github.com/samteezy/freshrss-mcp-extension),
+which is read-only by design; the read side, the protocol handling and the authentication are its.
+See [Write access](#write-access) for what the write tools do and do not do.
 
 It answers both eras of the protocol on the one URL: revision **2026-07-28**, where every request
 carries its own version and there is no handshake, and the earlier handshake revisions back to
@@ -244,6 +250,36 @@ can act on, which is what the spec asks for; only protocol mistakes become JSON-
 `feed_stats` reports `null` for a count it could not read, with the reason in `warnings`, rather than
 a confident zero.
 
+### Triage and organising tools
+
+| Tool | What it does | Arguments |
+| --- | --- | --- |
+| `mark_read` | marks entries read, or unread with `read: false` | `ids` (required, up to 200), `read` |
+| `set_starred` | stars entries, or unstars them with `starred: false` | `ids` (required), `starred` |
+| `label_entries` | puts a label on entries, or takes it off with `remove: true`; creates a label named for the first time | `ids` (required), `label` (a name) or `label_id`, `remove` |
+| `mark_all_read` | marks everything unread in one scope read | exactly one of `feed_id`, `category_id`, `label_id`, `all: true`; `up_to_id` |
+| `list_labels` | every label, with entry and unread counts | none |
+| `create_label`, `rename_label`, `delete_label` | manage labels; deleting one keeps its entries | `name`, `label_id` |
+| `subscribe_feed` | adds a feed by its URL and fetches it once | `url` (required), `category_id`, `title` |
+| `update_feed` | renames, moves or changes the visibility of a feed | `feed_id` (required), `title`, `category_id`, `visibility` (`important`, `main`, `category`, `feed`, `hidden`) |
+| `refresh_feed` | fetches one feed now | `feed_id` |
+| `unsubscribe_feed` | deletes a feed **and all of its entries**, starred ones included | `feed_id` |
+| `create_category`, `rename_category`, `delete_category` | manage categories; deleting one moves its feeds to the default category | `name`, `category_id` |
+
+`ids` are the entry ids `get_unread` and `search` return. Counts in the answers are what actually
+changed: marking an entry that is already read reports `changed: 0`, and an id that is not an entry of
+this account comes back under `not_found` instead of being skipped silently. A call where none of the
+ids is an entry is refused, and writes nothing.
+
+`mark_all_read` takes `up_to_id`, the newest entry id the agent has seen, so that entries arriving
+between reading the queue and clearing it stay unread; without it, everything up to now is marked.
+`all: true` covers the feeds `get_unread` covers: all but those whose visibility is `feed` or `hidden`.
+
+Names are stored the way the web interface stores them, HTML-escaped: a category created as `A & B`
+over MCP is the same as one created as `A & B` in the browser, and is listed back as `A &amp; B`. A
+name copied back from an answer is not escaped twice. Labels and categories share one namespace in
+FreshRSS, so a name taken by one is refused for the other, with a message saying which.
+
 ## Client configuration
 
 Claude Code:
@@ -277,21 +313,45 @@ npx mcp-remote 'https://freshrss.example.net/api/misc.php?ext=MCP' \
 ```
 
 Suggested framing for the agent: *"`feed_stats` and `list_feeds` first, then `get_unread` a feed at a
-time, and `get_article` only for the items worth reading in full."*
+time, and `get_article` only for the items worth reading in full. Mark what you have dealt with read,
+star what deserves a second look, and ask me before unsubscribing from anything."*
 
-## Read-only, on purpose
+## Write access
 
-There is no tool that marks anything read, stars it, adds a feed, or deletes anything. Triage is
-useful; an agent that can silently empty an inbox is not. Nothing here calls a write path, and the
-tools only ever go through the same DAOs the web reader uses, so a client sees exactly what that user
-would see when logged in.
+The upstream extension refuses to write, on the grounds that an agent which can silently empty an
+inbox is not useful. This fork writes, and keeps the part of that argument that matters: nothing is
+silent.
+
+* **The same code paths as a click.** Entry state goes through `FreshRSS_EntryDAO::markRead()` and
+  `markFavorite()`, feeds through `FreshRSS_feed_Controller::addFeed()`, `moveFeed()`, `renameFeed()`
+  and `deleteFeed()`, exactly as in the web interface and the Google Reader API. Unread counters,
+  account limits (`max_feeds`, `max_categories`), saved-search cleanup and the hooks other extensions
+  listen on (`EntriesRead`, `EntriesFavorite`, `CheckUrlBeforeAdd`, `FeedBeforeInsert`…) all behave
+  as they do for the user. After every write the HTTP cache of the web interface is invalidated, so an
+  open browser tab shows the change on its next load.
+* **Annotated.** Every tool declares `readOnlyHint`; `mark_all_read`, `unsubscribe_feed`,
+  `delete_label` and `delete_category` declare `destructiveHint`, so a client that asks before
+  destructive calls asks for those. `unsubscribe_feed` cannot be undone: the entries go with the feed.
+* **Checked before written.** Every id is looked up in the account first, a category given to
+  `subscribe_feed` or `update_feed` has to exist instead of quietly becoming the default one, and
+  `mark_all_read` needs exactly one scope. A refusal writes nothing.
+
+If an agent should read but not write, give it a FreshRSS user of its own (import the same OPML), or
+use the upstream read-only extension.
 
 ## Security notes
 
 * The API password is scoped to one user, but it does expose that user's whole archive and search to
   whoever holds it. Treat it as a credential, not as a preference.
-* Give the agent its own FreshRSS user if you want to keep your starred items and read state out of
-  reach — the feeds can be shared by importing the same OPML.
+* The same credential grants the write tools. Give the agent its own FreshRSS user if you want to keep
+  your starred items, read state and subscriptions out of its reach — the feeds can be shared by
+  importing the same OPML.
+* **`subscribe_feed` and `refresh_feed` make FreshRSS fetch a URL**, and the URL of `subscribe_feed`
+  comes from the client. That fetch is FreshRSS' own, with its own SSRF rules: private, loopback and
+  link-local addresses are refused unless the administrator allowed them in `internal_host_allowlist`
+  (or `INTERNAL_HOST_ALLOWLIST`). This is the same policy as for a subscription made in the browser,
+  deliberately, so that an allowlisted RSS-Bridge on the LAN works here too; it also means that what
+  the allowlist opens to the user, it opens to the agent.
 * Failures are logged through `Minz_Log::warning`, so they land in the FreshRSS log. Nothing that
   looks like a secret is written there: usernames appear only where FreshRSS itself would name them.
 * No CSRF token and no cookie is involved: the endpoint is a plain authenticated API, and it answers
@@ -321,15 +381,19 @@ xExtension-MCP/
 ├── metadata.json          # type: system, so it is reachable from /api/misc.php
 ├── extension.php          # Minz_Extension: registers the ApiMisc hook, nothing else
 └── src/
-    ├── Auth.php            # API password / Auth token → FreshRSS_Context::initUser()
-    ├── Server.php          # JSON-RPC 2.0 routing, header checks, and the two eras' envelopes
-    ├── ProtocolVersion.php # which revision one request is speaking, and what that implies
-    ├── ProtocolError.php   # a JSON-RPC error, with the HTTP status that goes with it
-    ├── Http.php            # HTTP primitives: body, headers, Accept, the answer
-    ├── Query.php           # refuses a search string FreshRSS would have partly ignored
-    ├── Continuation.php    # the signed, account- and order-bound paging cursor
-    ├── UrlPolicy.php       # which URLs fetch_full_content may fetch
-    └── Tools.php           # the five tools, on top of the FreshRSS DAOs
+    ├── Auth.php              # API password / Auth token → FreshRSS_Context::initUser()
+    ├── Server.php            # JSON-RPC 2.0 routing, header checks, and the two eras' envelopes
+    ├── ProtocolVersion.php   # which revision one request is speaking, and what that implies
+    ├── ProtocolError.php     # a JSON-RPC error, with the HTTP status that goes with it
+    ├── Http.php              # HTTP primitives: body, headers, Accept, the answer
+    ├── Query.php             # refuses a search string FreshRSS would have partly ignored
+    ├── Continuation.php      # the signed, account- and order-bound paging cursor
+    ├── UrlPolicy.php         # which URLs fetch_full_content may fetch
+    ├── Arguments.php         # typed, refusing reads of tool arguments, shared by every tool
+    ├── Tools.php             # the tool catalogue, one place where calls are checked; the read tools
+    ├── EntryTools.php        # mark_read, set_starred, mark_all_read, label_entries
+    ├── LabelTools.php        # list/create/rename/delete labels
+    └── SubscriptionTools.php # subscribe/update/refresh/unsubscribe feeds; create/rename/delete categories
 ```
 
 Syntax-check without a host PHP:
@@ -346,13 +410,24 @@ literals, encodings and reserved ranges.
 docker run --rm -v "$PWD:/w:ro" php:8.4-cli php /w/tests/url_policy.php
 ```
 
-End-to-end checks, against any FreshRSS (they only read). A hundred and forty-four of them, both eras:
-the legacy handshake and a modern `server/discover`, every header-mismatch and version-refusal path,
-each tool, the Accept matrix, every credential form, the strict-credential and enumeration probes, and
-forged, edited and cross-account continuation tokens.
+End-to-end checks in two suites. `tests/smoke.py` only reads, so it runs against any FreshRSS: both
+eras, the legacy handshake and a modern `server/discover`, every header-mismatch and version-refusal
+path, each read tool, the Accept matrix, every credential form, the strict-credential and enumeration
+probes, and forged, edited and cross-account continuation tokens.
 
 ```sh
 FRSS_URL=https://freshrss.example.net FRSS_USER=alice FRSS_API_PASSWORD=secret python3 tests/smoke.py
+```
+
+`tests/write.py` changes the account it runs against, so it runs against a disposable one.
+`tests/e2e/run.sh` starts `freshrss/freshrss:edge` with the extension mounted read-only and a static
+feed server beside it, seeds two accounts from `tests/e2e/subscriptions.opml`, runs both suites and
+removes everything again. It needs Docker and `python3`, nothing else; `KEEP=1` leaves the containers
+running, `E2E_IMAGE` picks another FreshRSS image.
+
+```sh
+sh tests/e2e/run.sh          # smoke and write
+sh tests/e2e/run.sh write    # one suite
 ```
 
 Mount an extension read-only when you test it. A container that can write to the source tree will
@@ -384,6 +459,17 @@ turn a stray `echo` into a mystery bug.
   `FreshMcp_Tools::reset()` because a PHP worker lives on to serve the next account.
 
 ## Changelog
+
+**0.4.0** — write access.
+
+* Fifteen new tools, all but `list_labels` writing: `mark_read`, `set_starred`, `mark_all_read`, `label_entries`; `list_labels`,
+  `create_label`, `rename_label`, `delete_label`; `subscribe_feed`, `update_feed`, `refresh_feed`,
+  `unsubscribe_feed`; `create_category`, `rename_category`, `delete_category`. Each goes through the
+  FreshRSS code path the web interface uses, declares `readOnlyHint`/`destructiveHint`, checks ids and
+  names before writing, and answers with what actually changed.
+* Required arguments are checked for every tool before its handler runs.
+* Tests: `tests/write.py` against a disposable FreshRSS started by `tests/e2e/run.sh`, which also runs
+  the smoke suite; the shared client code is in `tests/mcp_client.py`.
 
 **0.3.1** — fixes from a review.
 

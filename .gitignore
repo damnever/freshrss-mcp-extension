@@ -6,3 +6,4 @@ data/
 # local scratch from the smoke test
 __pycache__/
 *.pyc
+dist/

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Gamma Weekly</title>
+    <link>http://feeds/gamma/</link>
+    <description>Fixture feed Gamma Weekly</description>
+    <item>
+      <title>Gamma Weekly item 1: notes on topic1</title>
+      <link>http://feeds/gamma/1.html</link>
+      <guid isPermaLink="false">gamma-1</guid>
+      <pubDate>Sun, 23 Nov 2025 00:15:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Gamma Weekly item 1, about topic1 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Gamma Weekly item 2: notes on topic2</title>
+      <link>http://feeds/gamma/2.html</link>
+      <guid isPermaLink="false">gamma-2</guid>
+      <pubDate>Sun, 23 Nov 2025 01:15:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Gamma Weekly item 2, about topic2 and gardening.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Gamma Weekly item 3: notes on topic3</title>
+      <link>http://feeds/gamma/3.html</link>
+      <guid isPermaLink="false">gamma-3</guid>
+      <pubDate>Sun, 23 Nov 2025 02:15:00 GMT</pubDate>
+      <description>&lt;p&gt;Body of Gamma Weekly item 3, about topic3 and gardening.&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>

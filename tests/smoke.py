@@ -6,7 +6,8 @@ Usage:
         python3 tests/smoke.py
 
 The API password is the one shown by FreshRSS under Authentication, or the `Auth` token
-returned by the Google Reader API. Nothing here writes to FreshRSS.
+returned by the Google Reader API. Nothing here writes to FreshRSS; tests/write.py covers the
+write tools, against a disposable account.
 """
 import base64
 import json
@@ -16,145 +17,8 @@ import sys
 import urllib.error
 import urllib.request
 
-URL = os.environ.get('FRSS_URL', 'http://127.0.0.1:8099').rstrip('/')
-USER = os.environ.get('FRSS_USER', '')
-PASSWORD = os.environ.get('FRSS_API_PASSWORD', '')
-ENDPOINT = f'{URL}/api/misc.php?ext=MCP'
-PATH_INFO_ENDPOINT = f'{URL}/api/misc.php/MCP/'
-
-# The newest revision the extension speaks; the other era is everything up to 2025-11-25.
-MODERN = '2026-07-28'
-
-failures: list[str] = []
-
-
-def check(label: str, ok: bool, detail: str = '') -> None:
-    print(f'{"PASS" if ok else "FAIL"}  {label}' + (f'  — {detail}' if detail and not ok else ''))
-    if not ok:
-        failures.append(label)
-
-
-def post(payload=None, *, auth: bool = True, url: str = ENDPOINT, raw: str | None = None,
-         creds: str | None = None, headers: dict | None = None):
-    """POST one message; returns (status, parsed-body-or-None, raw-text)."""
-    body = raw if raw is not None else json.dumps(payload).encode()
-    req = urllib.request.Request(url, data=body, method='POST',
-                                headers={'Content-Type': 'application/json'})
-    if auth:
-        token = base64.b64encode((creds or f'{USER}:{PASSWORD}').encode()).decode()
-        req.add_header('Authorization', f'Basic {token}')
-    for name, value in (headers or {}).items():
-        req.add_header(name, value)
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False  # self-signed installs are the norm on a homelab
-    ctx.verify_mode = ssl.CERT_NONE
-    try:
-        with urllib.request.urlopen(req, timeout=30, context=ctx) as reply:
-            text = reply.read().decode('utf-8', 'replace')
-            status = reply.status
-    except urllib.error.HTTPError as e:
-        text = e.read().decode('utf-8', 'replace')
-        status = e.code
-    try:
-        parsed = json.loads(text) if text else None
-    except json.JSONDecodeError:
-        parsed = None
-    return status, parsed, text
-
-
-def rpc(method, params=None, msg_id=1, *, url: str = ENDPOINT):
-    return post({'jsonrpc': '2.0', 'id': msg_id, 'method': method, 'params': params or {}}, url=url)
-
-
-def tool(name, arguments=None):
-    status, parsed, text = post({'jsonrpc': '2.0', 'id': 2, 'method': 'tools/call',
-                                 'params': {'name': name, 'arguments': arguments or {}}})
-    return status, parsed, payload_of(parsed), text
-
-
-def modern(method, params=None, *, version=MODERN, msg_id=7, version_header=True, method_header=True,
-           name_header=True, name=None, url=ENDPOINT):
-    """One request of the 2026-07-28 era, with the headers that era mirrors from the body.
-
-    version_header and method_header may be False to leave a header out, or a string to
-    send a value that disagrees with the body on purpose.
-    """
-    arguments = dict(params or {})
-    arguments['_meta'] = {
-        'io.modelcontextprotocol/protocolVersion': version,
-        'io.modelcontextprotocol/clientInfo': {'name': 'smoke', 'version': '0'},
-        'io.modelcontextprotocol/clientCapabilities': {},
-    }
-    headers = {}
-    for header, wanted, label in (('MCP-Protocol-Version', version_header, version), ('Mcp-Method', method_header, method)):
-        if wanted is True:
-            headers[header] = label
-        elif wanted is not False:
-            headers[header] = str(wanted)
-    mirrored = name if name is not None else arguments.get('name', arguments.get('uri'))
-    if name_header and mirrored is not None:
-        headers['Mcp-Name'] = str(mirrored)
-    return post({'jsonrpc': '2.0', 'id': msg_id, 'method': method, 'params': arguments}, headers=headers, url=url)
-
-
-def modern_tool(name, arguments=None, **kwargs):
-    status, parsed, text = modern('tools/call', {'name': name, 'arguments': arguments or {}}, **kwargs)
-    return status, parsed, payload_of(parsed), text
-
-
-def encoded(value):
-    """A header value in the =?base64?…?= sentinel form."""
-    return '=?base64?' + base64.b64encode(value.encode()).decode() + '?='
-
-
-def payload_of(parsed):
-    """The JSON a tool result carried, or None."""
-    if parsed and 'result' in parsed:
-        content = parsed['result'].get('content') or []
-        if content and content[0].get('type') == 'text':
-            try:
-                return json.loads(content[0]['text'])
-            except json.JSONDecodeError:
-                return None
-    return None
-
-
-def conforms(schema, value, path='result'):
-    """Why a value does not match a schema, or None. Type and required are all these schemas use."""
-    kind = schema.get('type')
-    if isinstance(kind, list):
-        for one in kind:
-            if conforms({**schema, 'type': one}, value, path) is None:
-                return None
-        return f'{path} is none of {kind}'
-    if kind == 'object':
-        if not isinstance(value, dict):
-            return f'{path} is not an object'
-        for key in schema.get('required', []):
-            if key not in value:
-                return f'{path}.{key} is missing'
-        for key, sub in (schema.get('properties') or {}).items():
-            if key in value:
-                why = conforms(sub, value[key], f'{path}.{key}')
-                if why:
-                    return why
-        return None
-    if kind == 'array':
-        if not isinstance(value, list):
-            return f'{path} is not a list'
-        for index, item in enumerate(value[:3]):
-            why = conforms(schema.get('items') or {}, item, f'{path}[{index}]')
-            if why:
-                return why
-        return None
-    if kind == 'string':
-        return None if isinstance(value, str) else f'{path} is not a string but {type(value).__name__}'
-    if kind == 'integer':
-        return None if isinstance(value, int) and not isinstance(value, bool) else \
-            f'{path} is not an integer but {type(value).__name__}'
-    if kind == 'boolean':
-        return None if isinstance(value, bool) else f'{path} is not a boolean but {type(value).__name__}'
-    return None
+from mcp_client import (ENDPOINT, MODERN, PASSWORD, PATH_INFO_ENDPOINT, URL, USER, check, conforms, encoded,
+                        finish, modern, modern_tool, post, rpc, tool)
 
 if not USER or not PASSWORD:
     sys.exit('Set FRSS_USER and FRSS_API_PASSWORD (see --help in the README).')
@@ -187,7 +51,7 @@ check('initialize answers 200', status == 200, f'HTTP {status}')
 check('initialize keeps the client protocol version', result.get('protocolVersion') == '2025-06-18', str(result))
 check('initialize announces the server', result.get('serverInfo', {}).get('name') == 'freshrss-mcp', str(result.get('serverInfo')))
 check('initialize declares tools', bool(result.get('capabilities', {}).get('tools')))
-check('initialize explains the read-only scope', 'ead-on' in (result.get('instructions') or ''))
+check('initialize explains the tools', 'mark_read' in (result.get('instructions') or ''))
 
 status, parsed, text = post({'jsonrpc': '2.0', 'method': 'notifications/initialized'})
 check('notifications get an empty 202', status == 202 and not text.strip(), f'HTTP {status} body={text[:40]!r}')
@@ -198,8 +62,17 @@ check('ping', status == 200 and 'result' in (parsed or {}), str(parsed))
 # --- tools/list ------------------------------------------------------------------
 status, parsed, _ = rpc('tools/list')
 tools = {t['name']: t for t in (parsed or {}).get('result', {}).get('tools', [])}
-expected = {'list_feeds', 'get_unread', 'search', 'get_article', 'feed_stats'}
-check('tools/list returns the five read-only tools', set(tools) == expected, str(sorted(tools)))
+CATALOGUE = {'list_feeds', 'get_unread', 'search', 'get_article', 'feed_stats', 'list_labels',
+            'mark_read', 'set_starred', 'mark_all_read', 'label_entries',
+            'create_label', 'rename_label', 'delete_label',
+            'subscribe_feed', 'update_feed', 'unsubscribe_feed', 'refresh_feed',
+            'create_category', 'rename_category', 'delete_category'}
+check('tools/list returns the whole catalogue', set(tools) == CATALOGUE, str(sorted(tools)))
+check('every tool says whether it only reads',
+      all(isinstance(t.get('annotations', {}).get('readOnlyHint'), bool) for t in tools.values()))
+check('the destructive tools say so',
+      {n for n, t in tools.items() if t.get('annotations', {}).get('destructiveHint')} ==
+      {'mark_all_read', 'delete_label', 'unsubscribe_feed', 'delete_category'})
 check('every tool has a schema and a description',
       all(t.get('inputSchema', {}).get('type') == 'object' and t.get('description') for t in tools.values()))
 
@@ -309,7 +182,7 @@ check('server/discover announces the server',
       found.get('_meta', {}).get('io.modelcontextprotocol/serverInfo', {}).get('name') == 'freshrss-mcp',
       str(found)[:200])
 check('server/discover declares tools', bool(found.get('capabilities', {}).get('tools')), str(found)[:200])
-check('server/discover explains the read-only scope', 'ead-on' in (found.get('instructions') or ''))
+check('server/discover explains the tools', 'mark_read' in (found.get('instructions') or ''))
 check('server/discover says how long to remember it',
       isinstance(found.get('ttlMs'), int) and found.get('cacheScope') == 'private', str(found)[:200])
 
@@ -410,7 +283,7 @@ status, parsed, _ = post({'jsonrpc': '2.0', 'id': 3, 'method': 'tools/list'},
                          headers={'MCP-Protocol-Version': '2025-11-25'})
 check('a 2025-11-25 request is served the handshake era too',
       status == 200 and 'resultType' not in (parsed or {}).get('result', {})
-      and len((parsed or {}).get('result', {}).get('tools', [])) == 5, f'HTTP {status} {str(parsed)[:160]}')
+      and len((parsed or {}).get('result', {}).get('tools', [])) == len(CATALOGUE), f'HTTP {status} {str(parsed)[:160]}')
 
 req = urllib.request.Request(ENDPOINT, method='DELETE', data=b'')
 req.add_header('Authorization', 'Basic ' + base64.b64encode(f'{USER}:{PASSWORD}'.encode()).decode())
@@ -612,8 +485,4 @@ status, parsed, _ = rpc('ping', url=PATH_INFO_ENDPOINT)
 check('the /api/misc.php/MCP/ form works too', status == 200 and 'result' in (parsed or {}),
       f'HTTP {status} — if this fails, enable PATH_INFO on the web server')
 
-print()
-if failures:
-    print(f'{len(failures)} check(s) failed: ' + ', '.join(failures))
-    sys.exit(1)
-print('all checks passed')
+finish()
